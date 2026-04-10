@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+# Post-edit diagnostics
+
+After modifying any file under this repository, follow the project skill **post-edit-diagnostics**: `.cursor/skills/post-edit-diagnostics/SKILL.md` (read_lints on edited paths, fix issues, then `uv run python -m compileall -q src` and re-check).

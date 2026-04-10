@@ -4,7 +4,8 @@ from __future__ import annotations
 import base64
 import copy
 import json
-from typing import Any, Literal, TypedDict, cast
+from collections.abc import Sequence
+from typing import Any, Literal, NotRequired, TypedDict, cast
 
 from rich.markup import escape
 
@@ -38,6 +39,7 @@ class ToolResultBlock(TypedDict):
     type: Literal["tool_result"]
     tool_use_id: str
     content: str
+    is_error: NotRequired[bool]
 
 
 ContentBlock = TextBlock | ImageBlock | ToolUseBlock | ToolResultBlock
@@ -82,6 +84,18 @@ def make_text_block(text: str) -> TextBlock:
     return {"type": "text", "text": text}
 
 
+def _preview_text(text: str, limit: int = 120) -> str:
+    compact = " ".join(text.splitlines())
+    if len(compact) <= limit:
+        return compact
+    return f"{compact[:limit]}..."
+
+
+def _preview_json(data: object, limit: int = 120) -> str:
+    raw = json.dumps(data, ensure_ascii=False)
+    return _preview_text(raw, limit=limit)
+
+
 def build_user_content_blocks(
     *,
     text: str | None,
@@ -97,6 +111,39 @@ def build_user_content_blocks(
     for raw, mt in image_raw:
         blocks.append(make_image_block(raw, mt))
     return blocks
+
+
+def build_assistant_content_blocks(api_content: Sequence[Any]) -> list[ContentBlock]:
+    """
+    将 Anthropic `Message.content` 映射为本项目的 `ContentBlock`。
+
+    第一版仅保留 `text` 与 `tool_use`，其余块先忽略，避免把 SDK 专有结构直接写入会话。
+    """
+    blocks: list[ContentBlock] = []
+    for block in api_content:
+        block_type = getattr(block, "type", None)
+        if block_type == "text":
+            blocks.append(make_text_block(getattr(block, "text")))
+            continue
+        if block_type == "tool_use":
+            blocks.append(
+                {
+                    "type": "tool_use",
+                    "id": getattr(block, "id"),
+                    "name": getattr(block, "name"),
+                    "input": dict(getattr(block, "input")),
+                }
+            )
+    return blocks
+
+
+def extract_tool_use_blocks(blocks: Sequence[ContentBlock]) -> list[ToolUseBlock]:
+    """从一条助手消息里提取全部 `tool_use`。"""
+    out: list[ToolUseBlock] = []
+    for block in blocks:
+        if block["type"] == "tool_use":
+            out.append(block)
+    return out
 
 
 class ChatSession:
@@ -119,6 +166,12 @@ class ChatSession:
 
     def append_assistant_content_blocks(self, blocks: list[ContentBlock]) -> None:
         self.messages.append({"role": "assistant", "content": blocks})
+
+    def append_assistant_api_content(self, api_content: Sequence[Any]) -> list[ContentBlock]:
+        """将 Anthropic `Message.content` 转为本地块后写入会话，并返回该块列表。"""
+        blocks = build_assistant_content_blocks(api_content)
+        self.append_assistant_content_blocks(blocks)
+        return blocks
 
     def append_tool_result_blocks(self, blocks: list[ToolResultBlock]) -> None:
         """助手 tool_use 之后追加 tool_result 用户消息（05 调用）。"""
@@ -157,9 +210,12 @@ def format_api_message_markup(msg: ApiMessage) -> str:
         elif block["type"] == "image":
             parts.append(f"[图·{escape(block['source']['media_type'])}]")
         elif block["type"] == "tool_use":
-            parts.append(f"[工具 {escape(block['name'])}]")
+            preview = _preview_json(block["input"])
+            parts.append(f"[工具 {escape(block['name'])}] {escape(preview)}")
         elif block["type"] == "tool_result":
-            parts.append("[tool_result]")
+            preview = _preview_text(block["content"])
+            label = "tool_error" if block.get("is_error") else "tool_result"
+            parts.append(f"[{label}] {escape(preview)}")
     body = " ".join(parts) if parts else "(空)"
     return f"[{style}]{label}[/]: {body}"
 

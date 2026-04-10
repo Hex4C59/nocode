@@ -1,0 +1,18 @@
+---
+alwaysApply: true
+---
+# Project constraints
+
+1. **跨平台目标：** 在 macOS、Linux、Windows 上行为一致，可安装、可运行；不依赖单一平台的路径、换行、编码或 shell 习惯。
+
+2. **路径与目录：** 使用 `pathlib.Path`；禁止手写 `\`/`/` 拼接；不假设文件名大小写不敏感；临时目录与用户配置目录使用 `tempfile`、`platformdirs` 等惯例 API，避免硬编码仅某平台成立的路径。
+
+3. **子进程：** 少用 `shell=True`；优先列表参数，配合 `shutil.which` 等解析可执行文件；注意 Windows 下 `.exe` 与引号/转义差异。
+
+4. **文本与编码：** 默认 UTF-8，读写显式 `encoding="utf-8"`；行边界处理使用 `splitlines()`，不以「只能是 `\n`」为逻辑前提。
+
+5. **环境变量：** 读取策略一致（例如统一大写键名，或经一层封装）。
+
+6. **测试与自检：** 关键逻辑至少在 Linux CI 覆盖；路径、子进程、文件锁等易错点有针对性测试。变更后检查：是否引入绝对路径、Unix-only 语义或隐式依赖某 shell。
+
+7. **Claude Code 上游：** 凡需对照、查阅或核对 Claude Code 实现（目录结构、协议、行为），以本机 `/Users/hex4c59/Code/personal/TypeScript/claude-code` 中的源码为准；不得仅凭记忆推断其 API、布局或运行时行为。
