@@ -1,9 +1,4 @@
-"""
-Welcome panel for the nocode TUI: branding, animated mascot, cwd, and tips.
-
-A single centered splash screen displaying the mascot and shortcuts in a clean
-bordered box.
-"""
+"""Welcome panel widgets for the `nocode` Textual application."""
 
 from __future__ import annotations
 
@@ -19,13 +14,6 @@ from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Static
 
-# ---------------------------------------------------------------------------
-# Dog mascot pose data
-# ---------------------------------------------------------------------------
-# Each pose is a list of Rich Text lines. The dog is ~11 cols wide, 5 rows.
-# Uses Unicode block-drawing characters (U+2580..U+259F) for sub-cell detail.
-# Two colours: BODY (golden/amber) and FACE (darker brown for contrast).
-
 BODY = "rgb(218,165,32)"
 FACE = "rgb(139,90,43)"
 TONGUE = "rgb(220,80,80)"
@@ -34,84 +22,74 @@ type PoseName = str
 
 
 def _dog_default(tail: str = "╲") -> list[Text]:
-    """Sitting dog, ears up. *tail* lets callers vary just the tail glyph."""
     lines: list[Text] = []
 
-    # row 0: ears
-    r0 = Text()
-    r0.append("  ▄ ", style=BODY)
-    r0.append("   ", style="default")
-    r0.append("▄  ", style=BODY)
-    lines.append(r0)
+    row0 = Text()
+    row0.append("  ▄ ", style=BODY)
+    row0.append("   ", style="default")
+    row0.append("▄  ", style=BODY)
+    lines.append(row0)
 
-    # row 1: head (eyes on face background)
-    r1 = Text()
-    r1.append(" ▐", style=BODY)
-    r1.append("◆   ◆", style=f"{FACE} on {BODY}")
-    r1.append("▌ ", style=BODY)
-    lines.append(r1)
+    row1 = Text()
+    row1.append(" ▐", style=BODY)
+    row1.append("◆   ◆", style=f"{FACE} on {BODY}")
+    row1.append("▌ ", style=BODY)
+    lines.append(row1)
 
-    # row 2: snout + tongue
-    r2 = Text()
-    r2.append("  ▐", style=BODY)
-    r2.append(" ▾ ", style=f"{FACE} on {BODY}")
-    r2.append("▌  ", style=BODY)
-    lines.append(r2)
+    row2 = Text()
+    row2.append("  ▐", style=BODY)
+    row2.append(" ▾ ", style=f"{FACE} on {BODY}")
+    row2.append("▌  ", style=BODY)
+    lines.append(row2)
 
-    # row 3: body
-    r3 = Text()
-    r3.append(" ▗█████▖ ", style=BODY)
-    lines.append(r3)
+    row3 = Text()
+    row3.append(" ▗█████▖ ", style=BODY)
+    lines.append(row3)
 
-    # row 4: legs + tail
-    r4 = Text()
-    r4.append("  ▜▘ ▝▛", style=BODY)
-    r4.append(f" {tail}", style=BODY)
-    lines.append(r4)
+    row4 = Text()
+    row4.append("  ▜▘ ▝▛", style=BODY)
+    row4.append(f" {tail}", style=BODY)
+    lines.append(row4)
 
     return lines
 
 
 def _dog_wag_left() -> list[Text]:
-    lines = _dog_default(tail="╱")
-    return lines
+    return _dog_default(tail="╱")
 
 
 def _dog_wag_right() -> list[Text]:
-    lines = _dog_default(tail="╲")
-    return lines
+    return _dog_default(tail="╲")
 
 
 def _dog_bark() -> list[Text]:
-    """Mouth open — bark!"""
     lines: list[Text] = []
 
-    r0 = Text()
-    r0.append("  ▄ ", style=BODY)
-    r0.append("   ", style="default")
-    r0.append("▄  ", style=BODY)
-    lines.append(r0)
+    row0 = Text()
+    row0.append("  ▄ ", style=BODY)
+    row0.append("   ", style="default")
+    row0.append("▄  ", style=BODY)
+    lines.append(row0)
 
-    r1 = Text()
-    r1.append(" ▐", style=BODY)
-    r1.append("◆   ◆", style=f"{FACE} on {BODY}")
-    r1.append("▌ ", style=BODY)
-    lines.append(r1)
+    row1 = Text()
+    row1.append(" ▐", style=BODY)
+    row1.append("◆   ◆", style=f"{FACE} on {BODY}")
+    row1.append("▌ ", style=BODY)
+    lines.append(row1)
 
-    # mouth open wider
-    r2 = Text()
-    r2.append("  ▐", style=BODY)
-    r2.append("▿▿▿", style=f"{TONGUE} on {BODY}")
-    r2.append("▌  ", style=BODY)
-    lines.append(r2)
+    row2 = Text()
+    row2.append("  ▐", style=BODY)
+    row2.append("▿▿▿", style=f"{TONGUE} on {BODY}")
+    row2.append("▌  ", style=BODY)
+    lines.append(row2)
 
-    r3 = Text()
-    r3.append(" ▗█████▖ ", style=BODY)
-    lines.append(r3)
+    row3 = Text()
+    row3.append(" ▗█████▖ ", style=BODY)
+    lines.append(row3)
 
-    r4 = Text()
-    r4.append("  ▜▘ ▝▛ ╲", style=BODY)
-    lines.append(r4)
+    row4 = Text()
+    row4.append("  ▜▘ ▝▛ ╲", style=BODY)
+    lines.append(row4)
 
     return lines
 
@@ -136,13 +114,8 @@ IDLE_CYCLE: list[PoseName] = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# DogMascot widget
-# ---------------------------------------------------------------------------
-
-
 class DogMascot(Widget):
-    """Animated dog mascot that cycles idle poses via a timer."""
+    """Animated dog mascot that cycles through idle poses."""
 
     DEFAULT_CSS = """
     DogMascot {
@@ -157,37 +130,32 @@ class DogMascot(Widget):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._cycle_idx = 0
+        self._cycle_index = 0
         self._timer: Timer | None = None
 
     def on_mount(self) -> None:
         self._timer = self.set_interval(0.6, self._next_pose)
 
     def _next_pose(self) -> None:
-        self._cycle_idx = (self._cycle_idx + 1) % len(IDLE_CYCLE)
-        self.pose = IDLE_CYCLE[self._cycle_idx]
+        self._cycle_index = (self._cycle_index + 1) % len(IDLE_CYCLE)
+        self.pose = IDLE_CYCLE[self._cycle_index]
 
     def watch_pose(self) -> None:
         self.refresh()
 
     def render(self) -> RenderResult:
         lines = DOG_POSES.get(self.pose, DOG_POSES["default"])
-        max_w = max(cell_len(line.plain) for line in lines)
+        max_width = max(cell_len(line.plain) for line in lines)
         padded: list[Text] = []
         for line in lines:
-            gap = max_w - cell_len(line.plain)
+            gap = max_width - cell_len(line.plain)
             if gap > 0:
                 padded_line = line.copy()
                 padded_line.append(" " * gap)
                 padded.append(padded_line)
-            else:
-                padded.append(line)
+                continue
+            padded.append(line)
         return Text("\n").join(padded)
-
-
-# ---------------------------------------------------------------------------
-# Helper: version string
-# ---------------------------------------------------------------------------
 
 
 def _get_version() -> str:
@@ -197,15 +165,8 @@ def _get_version() -> str:
         return "0.0.0"
 
 
-# ---------------------------------------------------------------------------
-# WelcomePanel widget
-# ---------------------------------------------------------------------------
-
 class WelcomePanel(Widget):
-    """Centered startup panel mimicking Claude Code's LogoV2 compact layout.
-
-    Structure: round border with embedded title, all children center-aligned.
-    """
+    """Centered startup panel showing branding, mascot, cwd, and shortcuts."""
 
     DEFAULT_CSS = """
     WelcomePanel {
@@ -247,7 +208,6 @@ class WelcomePanel(Widget):
 
     def compose(self) -> ComposeResult:
         cwd = self._format_cwd()
-
         yield Static(
             "[bold]Welcome to Nocode[/bold]",
             classes="wp-line",

@@ -1,11 +1,12 @@
-# 系统提示词：提供 Claude Code 风格、但面向本地 Python TUI 与当前项目约束裁剪后的默认系统提示。
+"""Build the default system prompt for the local Python TUI agent."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
 
 
 def build_system_prompt(tool_names: Iterable[str]) -> str:
-    """构建默认系统提示词。"""
+    """Build the default system prompt for the local runtime."""
     tool_list = ", ".join(sorted(tool_names))
     return f"""You are a local coding agent running inside a Python Textual TUI.
 

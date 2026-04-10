@@ -1,29 +1,24 @@
-# 本地工具循环：执行 Anthropic `tool_use -> tool_result` 闭环，并复用统一工具注册表与运行时上下文。
+"""Tool loop for executing provider-emitted `tool_use` blocks locally."""
+
 from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from typing import Any
 
 from anthropic.types import ToolParam
 
-from nocode.env import project_root
+from nocode.config import project_root
 from nocode.messages import ChatSession, ToolResultBlock, ToolUseBlock, extract_tool_use_blocks
-from nocode.streaming import DEFAULT_MAX_TOKENS, stream_anthropic_turn
-from nocode.tools import (
-    ToolRuntime,
-    ToolSpec,
-    UserQuestion,
-    build_default_registry,
-    build_tool_params,
-)
+from nocode.providers.base import DEFAULT_MAX_TOKENS, LLMProvider
+from nocode.tools.registry import build_default_registry, build_tool_params
+from nocode.tools.types import ToolRuntime, ToolSpec, UserQuestion
 
 DEFAULT_MAX_TOOL_ROUNDS = 4
 MAX_TOOL_RESULT_CHARS = 12_000
 
 
 class MaxToolRoundsExceededError(RuntimeError):
-    """工具回合超过上限，停止继续请求模型。"""
+    """Raised when the provider keeps asking for tools beyond the limit."""
 
 
 def _truncate_result(text: str) -> str:
@@ -90,7 +85,7 @@ async def _execute_tool_use(
 async def run_tool_loop(
     session: ChatSession,
     *,
-    model: str | None = None,
+    provider: LLMProvider,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     system: str | None = None,
     tools: list[ToolParam] | None = None,
@@ -100,38 +95,32 @@ async def run_tool_loop(
     on_text_delta: Callable[[str], None] | None = None,
     on_session_change: Callable[[], None] | None = None,
 ) -> None:
-    """
-    运行最小工具循环。
-
-    每轮先流式展示文本，再把最终 assistant message 写回会话；若含 `tool_use`，执行本地工具并回传
-    `tool_result`，直到没有工具调用或达到上限。
-    """
+    """Run assistant turns until the provider stops asking for tools."""
     active_registry = registry if registry is not None else build_default_registry()
     active_tools = tools if tools is not None else build_tool_params(active_registry)
     active_runtime = runtime if runtime is not None else ToolRuntime(project_root())
     tool_rounds = 0
 
     while True:
-        final_message = await stream_anthropic_turn(
+        turn_result = await provider.stream_turn(
             session.to_json_serializable(),
-            model=model,
-            max_tokens=max_tokens,
             system=system,
             tools=active_tools,
+            max_tokens=max_tokens,
             on_text_delta=on_text_delta,
         )
-        assistant_blocks = session.append_assistant_api_content(final_message.content)
+        session.append_assistant_content_blocks(turn_result.content_blocks)
         if on_session_change is not None:
             on_session_change()
 
-        tool_uses = extract_tool_use_blocks(assistant_blocks)
+        tool_uses = extract_tool_use_blocks(turn_result.content_blocks)
         if not tool_uses:
             return
 
         tool_rounds += 1
         if tool_rounds > max_tool_rounds:
             raise MaxToolRoundsExceededError(
-                f"工具调用超过上限（max_tool_rounds={max_tool_rounds}）。",
+                f"工具调用超过上限（max_tool_rounds={max_tool_rounds}）。"
             )
 
         tool_results: list[ToolResultBlock] = []
