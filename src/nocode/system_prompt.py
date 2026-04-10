@@ -23,7 +23,8 @@ def build_system_prompt(tool_names: Iterable[str]) -> str:
 
 # Tools
 - Available tools in this runtime: {tool_list}
-- Use `read_file`, `glob_files`, and `search_text` to inspect the workspace.
+- Use `read_file`, `list_dir`, `glob_files`, and `search_text` to inspect the workspace.
+- Use `write_file` for new files or full rewrites; prefer `replace_in_file` for targeted edits.
 - Use `run_shell_command` for CLI tasks. Pass commands as argv arrays, not shell strings.
 - Use `todo_write` to keep a short working plan when a task has multiple steps.
 - Use `ask_user` when you need a direct answer from the user to proceed.

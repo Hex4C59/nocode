@@ -72,6 +72,82 @@ async def _read_file(runtime: ToolRuntime, input_obj: dict[str, object]) -> str:
     return _numbered_lines(text, offset=offset, limit=limit)
 
 
+MAX_LIST_DIR_ENTRIES = 500
+
+
+async def _list_dir(runtime: ToolRuntime, input_obj: dict[str, object]) -> str:
+    raw = str(input_obj.get("path", ".")).strip() or "."
+    base = _resolve_workspace_path(runtime.workspace_root, raw)
+    if not base.is_dir():
+        raise ValueError(f"not a directory: {raw}")
+    children = sorted(base.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+    truncated = len(children) > MAX_LIST_DIR_ENTRIES
+    if truncated:
+        children = children[:MAX_LIST_DIR_ENTRIES]
+    entries: list[dict[str, object]] = []
+    for child in children:
+        rel = _relative_display_path(runtime.workspace_root, child)
+        entries.append(
+            {
+                "path": rel,
+                "kind": "dir" if child.is_dir() else "file",
+            }
+        )
+    payload: dict[str, object] = {
+        "path": _relative_display_path(runtime.workspace_root, base),
+        "entries": entries,
+    }
+    if truncated:
+        payload["truncated"] = True
+    return _serialize_json(payload)
+
+
+async def _write_file(runtime: ToolRuntime, input_obj: dict[str, object]) -> str:
+    path = _resolve_workspace_path(runtime.workspace_root, str(input_obj["path"]))
+    content = str(input_obj["content"])
+    create_parents = bool(input_obj.get("create_parents", True))
+    if create_parents:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return _serialize_json(
+        {
+            "ok": True,
+            "path": _relative_display_path(runtime.workspace_root, path),
+            "bytes_written": len(content.encode("utf-8")),
+        }
+    )
+
+
+async def _replace_in_file(runtime: ToolRuntime, input_obj: dict[str, object]) -> str:
+    path = _resolve_workspace_path(runtime.workspace_root, str(input_obj["path"]))
+    old_string = str(input_obj["old_string"])
+    new_string = str(input_obj["new_string"])
+    replace_all = bool(input_obj.get("replace_all", False))
+    if not old_string:
+        raise ValueError("old_string must not be empty")
+    text = path.read_text(encoding="utf-8")
+    if old_string not in text:
+        raise ValueError("old_string not found in file (no changes written)")
+    if replace_all:
+        updated = text.replace(old_string, new_string)
+        count = text.count(old_string)
+    else:
+        if text.count(old_string) > 1:
+            raise ValueError(
+                "old_string matches multiple times; set replace_all=true or make old_string unique",
+            )
+        updated = text.replace(old_string, new_string, 1)
+        count = 1
+    path.write_text(updated, encoding="utf-8")
+    return _serialize_json(
+        {
+            "ok": True,
+            "path": _relative_display_path(runtime.workspace_root, path),
+            "replacements": count,
+        }
+    )
+
+
 async def _glob_files(runtime: ToolRuntime, input_obj: dict[str, object]) -> str:
     pattern = str(input_obj["pattern"]).strip()
     if not pattern:
@@ -237,6 +313,21 @@ def build_default_registry() -> dict[str, ToolSpec]:
             },
             handler=_read_file,
         ),
+        "list_dir": ToolSpec(
+            name="list_dir",
+            description=(
+                "List files and subdirectories directly under a workspace directory (non-recursive). "
+                "Results are capped; use glob_files or search_text for deeper discovery."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                },
+                "required": [],
+            },
+            handler=_list_dir,
+        ),
         "glob_files": ToolSpec(
             name="glob_files",
             description="Find files in the workspace using a glob pattern.",
@@ -264,6 +355,45 @@ def build_default_registry() -> dict[str, ToolSpec]:
                 "required": ["pattern"],
             },
             handler=_search_text,
+        ),
+        "write_file": ToolSpec(
+            name="write_file",
+            description=(
+                "Create or overwrite a UTF-8 text file in the workspace. "
+                "Prefer replace_in_file for small edits to existing files."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                    "create_parents": {"type": "boolean"},
+                },
+                "required": ["path", "content"],
+            },
+            handler=_write_file,
+            dangerous=True,
+            requires_confirmation=True,
+        ),
+        "replace_in_file": ToolSpec(
+            name="replace_in_file",
+            description=(
+                "Replace exact text in a UTF-8 file. When replace_all is false, old_string must match "
+                "exactly once; when true, every occurrence is replaced."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "old_string": {"type": "string"},
+                    "new_string": {"type": "string"},
+                    "replace_all": {"type": "boolean"},
+                },
+                "required": ["path", "old_string", "new_string"],
+            },
+            handler=_replace_in_file,
+            dangerous=True,
+            requires_confirmation=True,
         ),
         "run_shell_command": ToolSpec(
             name="run_shell_command",
